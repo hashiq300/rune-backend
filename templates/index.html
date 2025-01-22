@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG Chat System</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .chat-container {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .chat-main {
+            flex: 2;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .sources-panel {
+            flex: 1;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .chat-messages {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #eee;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+        .message {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .user-message {
+            background-color: #e3f2fd;
+            margin-left: 20%;
+        }
+        .ai-message {
+            background-color: #f5f5f5;
+            margin-right: 20%;
+        }
+        .input-container {
+            display: flex;
+            gap: 10px;
+        }
+        #messageInput {
+            flex-grow: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .source-item {
+            margin-bottom: 15px;
+            padding: 10px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+        .source-content {
+            font-size: 0.9em;
+            color: #666;
+        }
+        .source-file {
+            font-size: 0.8em;
+            color: #007bff;
+            margin-top: 5px;
+        }
+        .upload-section {
+            margin-bottom: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>RAG Chat System</h1>
+        
+        <div class="upload-section">
+            <h3>Upload Knowledge Base Documents</h3>
+            <input type="file" id="fileInput" accept=".txt, .pdf">
+            <button onclick="uploadFile()">Upload</button>
+        </div>
+
+        <div class="chat-container">
+            <div class="chat-main">
+                <div class="chat-messages" id="chatMessages"></div>
+                <div class="input-container">
+                    <input type="text" id="messageInput" placeholder="Type your message...">
+                    <button onclick="sendMessage()">Send</button>
+                </div>
+            </div>
+            
+            <div class="sources-panel">
+                <h3>Sources</h3>
+                <div id="sourcesContainer"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function addMessage(message, isUser) {
+            const chatMessages = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user-message' : 'ai-message'}`;
+            messageDiv.textContent = message;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function displaySources(sources) {
+            const sourcesContainer = document.getElementById('sourcesContainer');
+            sourcesContainer.innerHTML = '';
+            
+            sources.forEach(source => {
+                const sourceDiv = document.createElement('div');
+                sourceDiv.className = 'source-item';
+                sourceDiv.innerHTML = `
+                    <div class="source-content">${source.content}</div>
+                    <div class="source-file">Source: ${source.source}</div>
+                `;
+                sourcesContainer.appendChild(sourceDiv);
+            });
+        }
+
+        async function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
+            
+            if (!message) return;
+
+            addMessage(message, true);
+            messageInput.value = '';
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ message })
+                });
+
+                const reader = response.body.getReader();
+                let { value: messageBuffer, done: readerDone } = await reader.read();
+
+                let decoder = new TextDecoder();
+                let messageText = decoder.decode(messageBuffer);
+
+                let data = JSON.parse(messageText);
+                
+                if (data.error) {
+                    addMessage('Error: ' + data.error, false);
+                } else {
+                    addMessage(data.response, false);
+                    if (data.sources) {
+                        displaySources(data.sources);
+                    }
+                }
+            } catch (error) {
+                addMessage('Error: Failed to send message', false);
+            }
+        }
+
+        async function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select a file first');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const reader = response.body.getReader();
+                let { value: messageBuffer, done: readerDone } = await reader.read();
+
+                let decoder = new TextDecoder();
+                let messageText = decoder.decode(messageBuffer);
+
+                let data = JSON.parse(messageText);
+                
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                } else {
+                    alert('File uploaded and processed successfully');
+                    fileInput.value = '';
+                }
+            } catch (error) {
+                alert('Error uploading file');
+            }
+        }
+
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+In today's digital learning environment, students often face the challenge of
+managing and comprehending vast amounts of educational content. RUNE, an
+AI-powered study companion, addresses this issue by automating the extraction
+and transformation of information from PDF documents into more digestible and
+interactive formats. Through the application of advanced natural language
+processing (NLP) techniques, RUNE efficiently summarizes content, highlights
+key topics, and generates concise notes, all designed to enhance the learning
+experience.
+Beyond summarization, RUNE goes a step further by creating various types of
+questions, including multiple-choice questions (MCQs), to aid in revision and
+self-assessment. It also generates diagrams and visual aids that help to clarify
+complex concepts, making the material more accessible to students. This multifaceted approach ensures that students not only understand the content but can
+also engage with it in a meaningful way.
+A unique feature of RUNE is its ability to organize and sort content according to
+a specific syllabus, ensuring that the study material remains relevant and aligned
+with the curriculum. Additionally, RUNE offers a doubt-clearing mechanism,
+enabling students to ask questions about the content and receive immediate
+clarifications. By transforming traditional learning resources into dynamic study
+aids, RUNE stands out as an essential tool for modern education, empowering
+students to study more effectively and efficiently.
