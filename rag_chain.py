@@ -16,7 +16,11 @@ def initialize_vectorstore():
             persist_directory=Config.CHROMA_DIR,
             embedding_function=embeddings
         )
-    return None
+    # Create a new empty vectorstore if none exists
+    return Chroma(
+        persist_directory=Config.CHROMA_DIR,
+        embedding_function=embeddings
+    )
 
 def create_qa_chain(vectorstore):
     llm = ChatOllama(model=Config.LLM_MODEL, temperature=0.7)
