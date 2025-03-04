@@ -28,6 +28,7 @@ class CRUDBase:
 class CRUDUser(CRUDBase):
     def create(self, db: Session, obj_in: schemas.UserCreate):
         db_obj = models.User(
+            name=obj_in.name,  # Added name field
             email=obj_in.email,
             password_hash=obj_in.password  # In practice, hash the password
         )
