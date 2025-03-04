@@ -1,17 +1,17 @@
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
-from rag_chain import initialize_vectorstore, create_qa_chain, process_documents
+from rag_chain import initialize_vectorstore, create_gemini_qa_chain, process_documents, create_ollama_qa_chain
 from config import Config
 import os
 from sqlalchemy.orm import Session
-from schema import init_db, Chat
 from database import get_db, engine
 import models
-
+from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import create_async_engine
 
 
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
@@ -20,7 +20,8 @@ app.config['ALLOWED_EXTENSIONS'] = Config.ALLOWED_EXTENSIONS
 
 # Initialize vectorstore and QA chain
 vectorstore = initialize_vectorstore()
-qa_chain = create_qa_chain(vectorstore)
+qa_chain = create_gemini_qa_chain(vectorstore)
+# qa_chain = create_ollama_qa_chain(vectorstore)
 
 # Create database tables
 models.Base.metadata.create_all(bind=engine)
@@ -33,19 +34,19 @@ def allowed_file(filename):
 @app.route("/", methods=["GET"])
 def index():
     return render_template("index.html")
+from flask import Response, stream_with_context, jsonify, request
 
 @app.route('/chat', methods=['POST'])
 def chat():
-    global qa_chain
     data = request.get_json()
-    
+
     if not data or 'message' not in data:
         return jsonify({"error": "No message provided"}), 400
-    
+
     try:
         # Get database session
         db = next(get_db())
-        
+
         # Create chat if chat_id is not provided
         chat_id = data.get('chat_id')
         if not chat_id:
@@ -53,7 +54,11 @@ def chat():
             db.add(new_chat)
             db.commit()
             chat_id = new_chat.chat_id
-            
+
+        # Fetch previous messages for the chat
+        previous_messages = db.query(models.ChatMessage).filter_by(chat_id=chat_id).order_by(models.ChatMessage.timestamp.asc()).all()
+        history = [{"role": "user" if not msg.is_bot else "assistant", "content": msg.content} for msg in previous_messages]
+
         # Save user message
         user_message = models.ChatMessage(
             chat_id=chat_id,
@@ -61,31 +66,37 @@ def chat():
             is_bot=False
         )
         db.add(user_message)
-        
-        # Get response from QA chain
-        result = qa_chain.invoke({"query": data['message']})
-        
-        # Save bot response
-        bot_message = models.ChatMessage(
-            chat_id=chat_id,
-            content=result['result'],
-            is_bot=True
-        )
-        db.add(bot_message)
-        db.commit()
-        
-        sources = [{
-            "content": doc.page_content,
-            "source": doc.metadata['source']
-        } for doc in result['source_documents']]
-        
-        return jsonify({
-            "chat_id": chat_id,
-            "response": result['result'],
-            "sources": sources
-        })
+        db.commit()  # Commit user message before streaming
+
+        # Generator to stream the QA chain response
+        def generate():
+            full_bot_response = ""
+            # Assuming qa_chain.stream yields chunks of the response
+            for chunk in qa_chain.stream({
+                "input": data['message'],
+                "chat_history": history  # Pass previous messages here
+            }):
+                if "answer" in chunk:
+                    full_bot_response += chunk["answer"] + " "
+                    yield chunk["answer"] + " "
+                else:
+                    yield ""
+            # After streaming completes, save the full bot response to the database
+            bot_message = models.ChatMessage(
+                chat_id=chat_id,
+                content=full_bot_response.strip(),
+                is_bot=True
+            )
+            db.add(bot_message)
+            db.commit()
+
+        # Return a streaming response
+        return Response(stream_with_context(generate()), mimetype='text/event-stream')
+
     except Exception as e:
+        print(e)
         return jsonify({"error": str(e)}), 500
+
 
 @app.route("/chat", methods=["GET"])
 def get_chats():
@@ -110,9 +121,6 @@ def get_chats():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    global vectorstore, qa_chain
-    from langchain_chroma import Chroma
-    from langchain_ollama import OllamaEmbeddings
 
     if 'file' not in request.files:
         return jsonify({"error": "No file part"}), 400
@@ -128,18 +136,21 @@ def upload_file():
         file.save(file_path)
 
         try:
+            chat_id = request.form.get('chat_id')
+            if not chat_id:
+                return jsonify({"error": "chat_id is required"}), 400
+            
+
             splits = process_documents(file_path)
-            embeddings = OllamaEmbeddings(model=Config.EMBEDDING_MODEL)
+
+            for split in splits:
+                # Add chat_id to metadata
+                if not split.metadata:
+                    split.metadata = {}
+                split.metadata['chat_id'] = chat_id
 
             if vectorstore:
                 vectorstore.add_documents(splits)
-            else:
-                vectorstore = Chroma.from_documents(
-                    documents=splits,
-                    embedding=embeddings,
-                    persist_directory=Config.CHROMA_DIR
-                )
-                qa_chain = create_qa_chain(vectorstore)
 
             return jsonify({"message": "File processed successfully"}), 200
         except Exception as e:
