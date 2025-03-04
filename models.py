@@ -11,6 +11,7 @@ class User(Base):
     __tablename__ = "users"
 
     user_id = Column(String, primary_key=True, default=generate_uuid)
+    name = Column(String)  # Added name field
     email = Column(String, unique=True, index=True)
     password_hash = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
