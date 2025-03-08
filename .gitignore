@@ -1,2 +1,5 @@
 .env
 app.db
+chroma_db/
+__pycache__
+knowlegde_base/
