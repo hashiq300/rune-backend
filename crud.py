@@ -1,5 +1,7 @@
 from sqlalchemy.orm import Session
-from . import models, schemas
+
+from .src import models
+from . import schemas
 from datetime import datetime
 
 class CRUDBase:
