@@ -22,7 +22,7 @@ def chat(current_user):
     chat_id = data.get('chat_id')
     if not chat_id:
         return jsonify({"error": "No chat_id provided"}), 400
-
+    print("Hello")
     try:
         # Get database session
         db = next(get_db())
@@ -170,3 +170,22 @@ def get_chat_messages(current_user, chat_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
+@chat_router.route("/<chat_id>/", methods=["DELETE"])
+@token_required
+def delete_chat(current_user, chat_id):
+    try:
+        db = next(get_db())
+        
+        # Check if chat exists
+        chat = db.query(models.Chat).filter(models.Chat.chat_id == chat_id, models.Chat.user_id == current_user.user_id).first()
+        if not chat:
+            return jsonify({"error": "Chat not found"}), 404
+        
+        # Delete chat
+        db.delete(chat)
+        db.commit()
+        
+        return jsonify({"message": "Chat deleted successfully"})
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
