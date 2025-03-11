@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, Response, stream_with_context
 import src.models as models
-from src.rag_chain import qa_chain
+from src.rag_chain import create_qa_chain, vectorstore
 from src.routes.auth import token_required
 from src.database import get_db
 from langchain_core.messages import HumanMessage, AIMessage
@@ -47,16 +47,24 @@ def chat(current_user):
             content=data['message'],
             is_bot=False
         )
-        db.add(user_message)
-        db.commit()  # Commit user message before streaming
+          # Commit user message before streaming
+
+        file = db.query(models.File).filter_by(chat_id=chat_id,file_type=models.FileTypeEnum.syllabus).first()
+
+        syllabus = ""
+
+        if file:
+            syllabus += file.content
 
         # Generator to stream the QA chain response
+        qa_chain = create_qa_chain(vectorstore, chat_id)
         def generate():
             full_bot_response = ""
             # Assuming qa_chain.stream yields chunks of the response
             for chunk in qa_chain.stream({
                 "input": data['message'],
-                "chat_history": history  # Pass previous messages here
+                "chat_history": history,
+                "syllabus": syllabus
             }):
                 if "answer" in chunk:
                     full_bot_response += chunk["answer"] + " "
@@ -64,6 +72,9 @@ def chat(current_user):
                 else:
                     yield ""
             # After streaming completes, save the full bot response to the database
+
+            db.add(user_message)
+            db.commit()
             bot_message = models.ChatMessage(
                 chat_id=chat_id,
                 content=full_bot_response.strip(),
@@ -125,6 +136,16 @@ def create_chat(current_user):
         db.add(new_chat)
         db.commit()
         db.refresh(new_chat)
+
+
+        new_message = models.ChatMessage(
+            chat_id=new_chat.chat_id,
+            content="Hello! How can I help you today?",
+            is_bot=True
+        )
+        db.add(new_message)
+        db.commit()
+        db.refresh(new_message)
         
         return jsonify({
             "chat_id": new_chat.chat_id,
@@ -188,4 +209,5 @@ def delete_chat(current_user, chat_id):
         return jsonify({"message": "Chat deleted successfully"})
     
     except Exception as e:
+        print(e)
         return jsonify({"error": str(e)}), 500

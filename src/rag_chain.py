@@ -1,16 +1,16 @@
 from langchain_chroma import Chroma
-from langchain_ollama import OllamaEmbeddings
-from langchain.chains import RetrievalQA
-from langchain_community.document_loaders import TextLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_ollama import ChatOllama
+from langchain_ollama import OllamaEmbeddings, ChatOllama
 from langchain.chains import create_retrieval_chain
+from langchain_community.document_loaders import TextLoader
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from config import Config
 import os
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+
 
 
 system_prompt = (
@@ -19,8 +19,14 @@ system_prompt = (
     "If you don't know the answer, say so. and ask the user if you want to generate without the context if user says yes give answer without context"
     "do not mention about names like 'user' and 'context' in the response"
     "You can view previous messages provided"
+    "DO NOT GENERATE ANY CODE"
+    "Syllabus gives the relevent topics that the user need to study from the given notes"
+    "If the syllabus is provided, then generate accurate responses for user queries according to the syllabus"
+    "If the syllabus is provided and if the user query is about a topic that is not in the syllabus, say so and  ask the user if you need an answer out of the syllabus. If the user says yes, give the answer without referring to the syllabus"
+    "If there is no syllabus given, Use the retrieved context to generate accurate responses.  "
     "\n\n"
-    "{context}"
+    "<syllabus>{syllabus}</syllabus>"
+    "<context>{context}</context>"
 )
 
 prompt = ChatPromptTemplate.from_messages(
@@ -45,18 +51,13 @@ def initialize_vectorstore():
         embedding_function=embeddings
     )
 
-def create_ollama_qa_chain(vectorstore):
-    llm = ChatOllama(model=Config.LLM_MODEL, temperature=0.7)
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
-    
-    question_answer_chain = create_stuff_documents_chain(llm, prompt)
-    rag_chain = create_retrieval_chain(retriever, question_answer_chain)
+llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
+# llm = ChatOllama(model=Config.LLM_MODEL, temperature=0.7)
 
-    return rag_chain
-
-def create_gemini_qa_chain(vectorstore):
-    llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+def create_qa_chain(vectorstore, chat_id):
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 5, "filter": {
+        "chat_id": chat_id
+    }})
     
     question_answer_chain = create_stuff_documents_chain(llm, prompt)
     rag_chain = create_retrieval_chain(retriever, question_answer_chain)
@@ -65,11 +66,10 @@ def create_gemini_qa_chain(vectorstore):
 
 
 vectorstore = initialize_vectorstore()
-qa_chain = create_gemini_qa_chain(vectorstore)
 
 def process_documents(file_path: str):
   text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500,
+        chunk_size=1000,
         chunk_overlap=200
   )
   if file_path.endswith(".txt"):
