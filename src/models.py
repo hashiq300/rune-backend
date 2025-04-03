@@ -35,6 +35,7 @@ class Chat(Base):
     title = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
     user_id = Column(String, ForeignKey("users.user_id"))
+    bookmarked = Column(Boolean, default=False)
 
     user = relationship("User", back_populates="chats")
     messages = relationship("ChatMessage", back_populates="chat")

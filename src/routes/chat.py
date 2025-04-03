@@ -112,6 +112,54 @@ def get_chats(current_user):
         return jsonify({"error": str(e)}), 500
     
 
+@chat_router.route("/bookmark/", methods=["GET"])
+@token_required
+def get_bookmarked_chats(current_user):
+    try:
+        db = next(get_db())
+        chats = db.query(models.Chat).filter_by(user_id=current_user.user_id, bookmarked=True).all()
+        
+        # Convert to response format
+        chat_list = [{
+            "chat_id": chat.chat_id,
+            "title": chat.title,
+            "created_at": chat.created_at.isoformat(),
+            "user_id": chat.user_id,
+            "bookmarked": chat.bookmarked
+        } for chat in chats]
+        
+        return jsonify(chat_list)
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+
+@chat_router.route("/bookmark/<chat_id>/", methods=["POST"])
+@token_required
+def bookmark_chat(current_user, chat_id):
+    try:
+        db = next(get_db())
+        chat = db.query(models.Chat).filter_by(user_id=current_user.user_id, chat_id=chat_id).first()
+
+        if not chat:
+            return jsonify({"error": "Chat not found"}), 404
+        
+        
+        bookmark = chat.bookmarked
+
+
+        chat.bookmarked = not bookmark
+        db.commit()
+        db.refresh(chat)
+        
+        
+        
+        return jsonify({"message": f"successfully"})
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+
 
 
 
@@ -180,12 +228,13 @@ def get_chat_messages(current_user, chat_id):
             "content": message.content,
             "is_bot": message.is_bot,
             "timestamp": message.timestamp.isoformat(),
-            "chat_id": message.chat_id
+            "chat_id": message.chat_id,
         } for message in messages]
         
         return jsonify({
             "chat_id": chat_id,
-            "messages": message_list
+            "messages": message_list,
+            "bookmarked": chat.bookmarked
         })
     
     except Exception as e:

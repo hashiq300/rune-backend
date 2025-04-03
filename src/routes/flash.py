@@ -2,9 +2,8 @@ from flask import Blueprint, jsonify, request
 from langchain_core.prompts import ChatPromptTemplate
 from src.rag_chain import vectorstore, llm
 from src.routes.auth import token_required
-from langchain_google_genai import ChatGoogleGenerativeAI
 
-mcq_prompt = ChatPromptTemplate.from_messages(
+flashcard_prompt = ChatPromptTemplate.from_messages(
     [
         ("system", "Generate a list of Flash Card questions and answers based on the context. "
                   "Each question should have a unique id, a question string, an answer, "
@@ -38,8 +37,8 @@ def generate_flashcards(current_user, chat_id):
         
         print(keywords)
 
-        mcq_prompt_with_context = mcq_prompt.format(context=context)
-        response = llm.invoke(mcq_prompt_with_context)
+        flashcard_prompt_with_context = flashcard_prompt.format(context=context)
+        response = llm.invoke(flashcard_prompt_with_context)
 
         text = response.text()
 
